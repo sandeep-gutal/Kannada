@@ -39,3 +39,20 @@ npm run preview
 4. Use **Letters** as a varnamale chart and **Stories** as listening practice.
 
 Built for parents and teachers supporting children who speak English (or another language) at home and meet Kannada at NPS Varthur.
+
+## Deploy on Vercel
+
+This is a Vite SPA. `vercel.json` sets the Vite framework, `dist` output, and SPA rewrites.
+
+To create a **new Vercel project** from this repo:
+
+1. Open [vercel.com/new](https://vercel.com/new) and import `sandeep-gutal/Kannada`.
+2. Framework: **Vite**. Build: `npm run build`. Output: `dist`.
+3. Deploy.
+
+Or from a machine logged into the Vercel CLI:
+
+```bash
+npx vercel login
+npx vercel --yes --name kali-kannada --prod
+```
