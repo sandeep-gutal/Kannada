@@ -20,6 +20,7 @@ describe('Kali Grade 2 curriculum', () => {
     expect(isUnlocked(first!.id, [])).toBe(true)
     expect(isUnlocked(ALL_LESSONS[1]!.id, [])).toBe(false)
     expect(isUnlocked(ALL_LESSONS[1]!.id, [first!.id])).toBe(true)
+    expect(isUnlocked(ALL_LESSONS[1]!.id, [], true)).toBe(true)
   })
 
   it('gives every lesson exercises with valid answers', () => {

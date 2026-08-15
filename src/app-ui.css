@@ -76,8 +76,21 @@ input {
 
 .hud {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
   font-weight: 800;
+  align-items: center;
+}
+
+.who {
+  border: 2px solid var(--line);
+  background: #fff;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-weight: 800;
+  font-size: 13px;
+  box-shadow: 0 2px 0 #ddd;
 }
 
 .goal {
@@ -209,6 +222,15 @@ input {
   padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
   max-width: 480px;
   width: 100%;
+}
+
+.tabs.five {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.tabs.five button {
+  font-size: 11px;
+  padding: 10px 2px;
 }
 
 .shell .tabs {
@@ -616,6 +638,107 @@ input {
   background: none;
   padding: 8px 0;
   font-weight: 700;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.profile-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  border: 3px solid;
+  background: #fff;
+  border-radius: 18px;
+  padding: 16px 10px;
+  box-shadow: 0 4px 0 #e5e5e5;
+}
+
+.profile-card b {
+  font-size: 18px;
+}
+
+.profile-card small,
+.profile-stat {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.profile-emoji {
+  font-size: 36px;
+  line-height: 1;
+}
+
+.dash-card {
+  border: 3px solid;
+  border-radius: 18px;
+  padding: 14px;
+  margin: 12px 0;
+  background: #fff;
+}
+
+.dash-card.active {
+  background: #fffde8;
+}
+
+.dash-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.dash-top h3 {
+  margin: 0;
+}
+
+.dash-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 10px 0 4px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.dash-next {
+  font-weight: 800;
+  margin: 8px 0 0;
+}
+
+.pill {
+  margin-left: auto;
+  background: var(--green);
+  color: #fff;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.jump-note {
+  margin: 8px 18px 0;
+  background: #ddf4ff;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.node.jump {
+  background: #ddf4ff;
+  box-shadow: 0 6px 0 #84d8ff;
+}
+
+.picker-shell {
+  padding-bottom: 24px;
 }
 
 @media (min-width: 900px) {

@@ -24,7 +24,7 @@ npm test
 npm run dev
 ```
 
-Open the URL Vite prints (usually `http://localhost:5173`). Progress is stored in the browser (`localStorage`).
+Open the URL Vite prints (usually `http://localhost:5173`). Progress is stored **in this browser** for four family profiles: **Riddhi**, **Siddhi**, **Sandeep**, and **Pragati**. Hearts and gems never run out. Sandeep and Pragati can jump to any lesson; Riddhi and Siddhi follow the path in order. Open the **Family** tab for a dashboard of everyone.
 
 ```bash
 npm run build

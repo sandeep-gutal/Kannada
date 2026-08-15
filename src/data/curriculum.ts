@@ -556,7 +556,8 @@ export function lessonIndex(id: string): number {
   return ALL_LESSONS.findIndex((l) => l.id === id)
 }
 
-export function isUnlocked(id: string, completed: string[]): boolean {
+export function isUnlocked(id: string, completed: string[], canJump = false): boolean {
+  if (canJump) return true
   const i = lessonIndex(id)
   if (i <= 0) return true
   const prev = ALL_LESSONS[i - 1]

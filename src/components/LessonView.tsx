@@ -7,6 +7,7 @@ import { Mascot } from './Mascot'
 type Props = {
   lesson: Lesson
   hearts: number
+  unlimited?: boolean
   onExit: () => void
   onCorrect: () => void
   onWrong: (word: { kn: string; en: string; rom: string }) => void
@@ -21,6 +22,7 @@ function optionLabel(word: Word, showKn: boolean): string {
 export function LessonView({
   lesson,
   hearts,
+  unlimited = false,
   onExit,
   onCorrect,
   onWrong,
@@ -63,7 +65,7 @@ export function LessonView({
     }
     setMistakes((m) => m + 1)
     if (word) onWrong(word)
-    if (hearts <= 1) {
+    if (!unlimited && hearts <= 1) {
       onOutOfHearts()
     }
   }
@@ -95,9 +97,7 @@ export function LessonView({
         <div className="xp-track">
           <div className="xp-fill" style={{ width: `${pct}%` }} />
         </div>
-        <div className="hearts">
-          ❤ {hearts}
-        </div>
+        <div className="hearts">❤ {unlimited ? '∞' : hearts}</div>
       </header>
 
       <p className="instruction">{ex.instruction}</p>

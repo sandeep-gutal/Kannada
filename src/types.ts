@@ -79,6 +79,7 @@ export type Unit = {
 }
 
 export type Screen =
+  | { name: 'picker' }
   | { name: 'home' }
   | { name: 'lesson'; lessonId: string }
   | { name: 'result'; lessonId: string; xp: number; perfect: boolean; mistakes: number }
@@ -89,7 +90,20 @@ export type Screen =
   | { name: 'shop' }
   | { name: 'guide' }
 
+export type ProfileId = 'riddhi' | 'siddhi' | 'sandeep' | 'pragati'
+
+export type ProfileDef = {
+  id: ProfileId
+  name: string
+  emoji: string
+  color: string
+  blurb: string
+  canJump: boolean
+  outfit: string
+}
+
 export type Progress = {
+  profileId: ProfileId
   xp: number
   gems: number
   hearts: number
@@ -104,4 +118,11 @@ export type Progress = {
   dailyXp: number
   dailyDate: string
   goal: number
+  unlimited: boolean
+  canJump: boolean
+}
+
+export type AppMemory = {
+  activeId: ProfileId | null
+  profiles: Record<ProfileId, Progress>
 }
