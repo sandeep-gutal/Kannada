@@ -24,7 +24,7 @@ npm test
 npm run dev
 ```
 
-Open the URL Vite prints (usually `http://localhost:5173`). Progress is stored **in this browser** for four family profiles: **Riddhi**, **Siddhi**, **Sandeep**, and **Pragati**. Hearts and gems never run out. Sandeep and Pragati can jump to any lesson; Riddhi and Siddhi follow the path in order. Open the **Family** tab for a dashboard of everyone.
+Open the URL Vite prints (usually `http://localhost:5173`). Progress is saved **in this browser only** (not on a server). The same site on the same device shares one family save. A private/incognito window is empty until you paste **Family → Copy family save**. Four profiles: **Riddhi**, **Siddhi**, **Sandeep**, and **Pragati**. Hearts and gems never run out. Sandeep and Pragati can jump to any lesson; Riddhi and Siddhi follow the path in order. Open the **Family** tab for a dashboard of everyone.
 
 ```bash
 npm run build

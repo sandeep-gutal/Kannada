@@ -5,6 +5,8 @@ import {
   applyLessonComplete,
   emptyMemory,
   emptyProgress,
+  exportBackup,
+  importBackup,
   loseHeart,
   saveMemory,
   loadMemory,
@@ -48,5 +50,25 @@ describe('family profiles', () => {
     expect(loaded.profiles.siddhi.completed).toEqual([])
     expect(loaded.profiles.sandeep.name).toBe('Sandeep')
     expect(loaded.profiles.pragati.name).toBe('Pragati')
+  })
+
+  it('does not let an empty tab wipe a completed lesson', () => {
+    const first = ALL_LESSONS[0]!
+    const filled = emptyMemory()
+    filled.profiles.riddhi = applyLessonComplete(filled.profiles.riddhi, first.id, 15, true)
+    saveMemory(filled)
+    saveMemory(emptyMemory())
+    const loaded = loadMemory()
+    expect(loaded.profiles.riddhi.completed).toContain(first.id)
+    expect(loaded.profiles.riddhi.xp).toBeGreaterThanOrEqual(15)
+  })
+
+  it('round-trips a family backup code', () => {
+    const first = ALL_LESSONS[0]!
+    const memory = emptyMemory()
+    memory.profiles.siddhi = applyLessonComplete(memory.profiles.siddhi, first.id, 12, false)
+    const code = exportBackup(memory)
+    const restored = importBackup(code)
+    expect(restored?.profiles.siddhi.completed).toContain(first.id)
   })
 })

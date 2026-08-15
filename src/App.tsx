@@ -7,10 +7,14 @@ import { Mascot } from './components/Mascot'
 import {
   applyLessonComplete,
   currentLessonTitle,
+  exportBackup,
+  importBackup,
   loadMemory,
   loseHeart,
+  mergeMemory,
   rememberMistake,
   saveMemory,
+  STORAGE_KEY,
 } from './lib/progress'
 import { speakKannada } from './lib/speech'
 import { shuffle } from './lib/quiz'
@@ -38,10 +42,46 @@ export default function App() {
   )
   const [tab, setTab] = useState<'learn' | 'stories' | 'letters' | 'family' | 'profile'>('learn')
   const [practiceLesson, setPracticeLesson] = useState<(typeof ALL_LESSONS)[0] | null>(null)
+  const [backupText, setBackupText] = useState('')
+  const [backupNote, setBackupNote] = useState('')
 
   useEffect(() => {
-    saveMemory(memory)
+    const merged = saveMemory(memory)
+    if (JSON.stringify(merged) !== JSON.stringify(memory)) {
+      setMemory(merged)
+      return
+    }
+    if (typeof BroadcastChannel === 'undefined') return
+    const channel = new BroadcastChannel(STORAGE_KEY)
+    channel.postMessage('saved')
+    channel.close()
   }, [memory])
+
+  useEffect(() => {
+    const same = (next: AppMemory) =>
+      setMemory((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next))
+    const refresh = () => same(loadMemory())
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEY) refresh()
+    }
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+    window.addEventListener('storage', onStorage)
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', onVisible)
+    let channel: BroadcastChannel | null = null
+    if (typeof BroadcastChannel !== 'undefined') {
+      channel = new BroadcastChannel(STORAGE_KEY)
+      channel.onmessage = () => refresh()
+    }
+    return () => {
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', onVisible)
+      channel?.close()
+    }
+  }, [])
 
   const progress = memory.activeId ? memory.profiles[memory.activeId] : null
   const profileDef = progress ? getProfileDef(progress.profileId) : null
@@ -49,9 +89,15 @@ export default function App() {
   const totalLessons = ALL_LESSONS.length
 
   const selectProfile = (id: ProfileId) => {
-    setMemory((m) => ({ ...m, activeId: id }))
+    const disk = loadMemory()
+    setMemory({ ...disk, activeId: id })
     setScreen({ name: 'home' })
     setTab('learn')
+  }
+
+  const openPicker = () => {
+    setMemory(loadMemory())
+    setScreen({ name: 'picker' })
   }
 
   const patch = (fn: (p: Progress) => Progress) => {
@@ -104,7 +150,10 @@ export default function App() {
         </header>
         <main className="page">
           <h2>Who is learning?</h2>
-          <p>Each profile keeps its own path in this browser. Hearts and gems never run out.</p>
+          <p>
+            Each person has a separate path saved in this browser. Hearts and gems never run out.
+            Private windows start empty — use Family → Copy family save to bring progress across.
+          </p>
           <div className="profile-grid">
             {PROFILE_LIST.map((p) => {
               const stats = memory.profiles[p.id]
@@ -258,7 +307,7 @@ export default function App() {
                 </h1>
               </div>
               <div className="hud">
-                <button className="who" onClick={() => setScreen({ name: 'picker' })}>
+                <button className="who" onClick={openPicker}>
                   {profileDef.emoji} {progress.name}
                 </button>
                 <span>🔥 {progress.streak}</span>
@@ -392,7 +441,52 @@ export default function App() {
             {tab === 'family' && (
               <main className="page">
                 <h2>Family dashboard</h2>
-                <p>Progress is stored in this browser for each profile.</p>
+                <p className="note">
+                  Progress is saved in <strong>this browser’s memory</strong>, not on a server. The
+                  same website on the same phone or laptop shares one family save. A private /
+                  incognito window is a blank copy — it cannot see the other window unless you paste
+                  the family save below.
+                </p>
+                <div className="backup-box">
+                  <button
+                    className="cta"
+                    onClick={async () => {
+                      const code = exportBackup(loadMemory())
+                      setBackupText(code)
+                      try {
+                        await navigator.clipboard.writeText(code)
+                        setBackupNote('Family save copied. Paste it in a private window or another browser.')
+                      } catch {
+                        setBackupNote('Copy the text below, then paste it in the other window.')
+                      }
+                    }}
+                  >
+                    Copy family save
+                  </button>
+                  <textarea
+                    className="backup-text"
+                    rows={3}
+                    placeholder="Paste a family save here"
+                    value={backupText}
+                    onChange={(e) => setBackupText(e.target.value)}
+                  />
+                  <button
+                    className="ghost"
+                    onClick={() => {
+                      const incoming = importBackup(backupText)
+                      if (!incoming) {
+                        setBackupNote('That save could not be read.')
+                        return
+                      }
+                      const merged = saveMemory(mergeMemory(loadMemory(), incoming))
+                      setMemory({ ...merged, activeId: memory.activeId })
+                      setBackupNote('Progress restored on this browser. Open the profile to see completed lessons.')
+                    }}
+                  >
+                    Restore family save
+                  </button>
+                  {backupNote && <p className="rom">{backupNote}</p>}
+                </div>
                 {PROFILE_LIST.map((p) => {
                   const stats = memory.profiles[p.id]
                   const pct = Math.round((stats.completed.length / totalLessons) * 100)
@@ -473,7 +567,7 @@ export default function App() {
                 <button className="cta" onClick={startPractice}>
                   Practice weak words
                 </button>
-                <button className="ghost" onClick={() => setScreen({ name: 'picker' })}>
+                <button className="ghost" onClick={openPicker}>
                   Switch profile
                 </button>
                 <button className="ghost" onClick={() => setScreen({ name: 'shop' })}>
