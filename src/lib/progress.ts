@@ -1,7 +1,7 @@
 import { getProfileDef, PROFILE_IDS, PROFILE_LIST } from '../data/profiles'
 import type { AppMemory, ProfileId, Progress } from '../types'
 
-const KEY = 'kali-kannada-nps-varthur-v2'
+export const STORAGE_KEY = 'kali-kannada-nps-varthur-v2'
 const HEART_MS = 20 * 60 * 1000
 
 export function today(): string {
@@ -73,22 +73,95 @@ function normalizeProgress(id: ProfileId, raw: Partial<Progress> | undefined): P
 
 export function loadMemory(): AppMemory {
   try {
-    const raw = localStorage.getItem(KEY)
+    const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return emptyMemory()
     const parsed = JSON.parse(raw) as Partial<AppMemory>
-    const profiles = {} as AppMemory['profiles']
-    for (const id of PROFILE_IDS) {
-      profiles[id] = normalizeProgress(id, parsed.profiles?.[id])
-    }
-    const activeId = parsed.activeId && PROFILE_IDS.includes(parsed.activeId) ? parsed.activeId : null
-    return { activeId, profiles }
+    return normalizeMemory(parsed)
   } catch {
     return emptyMemory()
   }
 }
 
-export function saveMemory(memory: AppMemory): void {
-  localStorage.setItem(KEY, JSON.stringify(memory))
+export function normalizeMemory(parsed: Partial<AppMemory> | null | undefined): AppMemory {
+  const profiles = {} as AppMemory['profiles']
+  for (const id of PROFILE_IDS) {
+    profiles[id] = normalizeProgress(id, parsed?.profiles?.[id])
+  }
+  const activeId = parsed?.activeId && PROFILE_IDS.includes(parsed.activeId) ? parsed.activeId : null
+  return { activeId, profiles }
+}
+
+function unique(items: string[]): string[] {
+  return [...new Set(items)]
+}
+
+export function mergeProgress(a: Progress, b: Progress): Progress {
+  const aTime = a.lastActive || ''
+  const bTime = b.lastActive || ''
+  const newer = aTime >= bTime ? a : b
+  const older = newer === a ? b : a
+  return {
+    ...newer,
+    xp: Math.max(a.xp, b.xp),
+    streak: Math.max(a.streak, b.streak),
+    dailyDate: newer.dailyDate || older.dailyDate,
+    dailyXp:
+      a.dailyDate === b.dailyDate
+        ? Math.max(a.dailyXp, b.dailyXp)
+        : newer.dailyXp,
+    completed: unique([...a.completed, ...b.completed]),
+    perfect: unique([...a.perfect, ...b.perfect]),
+    mistakes: a.mistakes.length >= b.mistakes.length ? a.mistakes : b.mistakes,
+    gems: Math.max(a.gems, b.gems),
+    hearts: Math.max(a.hearts, b.hearts),
+  }
+}
+
+export function mergeMemory(a: AppMemory, b: AppMemory): AppMemory {
+  const profiles = {} as AppMemory['profiles']
+  for (const id of PROFILE_IDS) {
+    profiles[id] = mergeProgress(a.profiles[id], b.profiles[id])
+  }
+  return { activeId: b.activeId ?? a.activeId, profiles }
+}
+
+export function saveMemory(memory: AppMemory): AppMemory {
+  let merged = memory
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) {
+      merged = mergeMemory(normalizeMemory(JSON.parse(raw) as Partial<AppMemory>), memory)
+    }
+  } catch {
+    merged = memory
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+  return merged
+}
+
+export function exportBackup(memory: AppMemory): string {
+  const payload = JSON.stringify({
+    v: 1,
+    savedAt: new Date().toISOString(),
+    memory,
+  })
+  return `KALI1.${btoa(unescape(encodeURIComponent(payload)))}`
+}
+
+export function importBackup(text: string): AppMemory | null {
+  const trimmed = text.trim()
+  try {
+    let json = trimmed
+    if (trimmed.startsWith('KALI1.')) {
+      json = decodeURIComponent(escape(atob(trimmed.slice(6))))
+    }
+    const parsed = JSON.parse(json) as { memory?: Partial<AppMemory> } & Partial<AppMemory>
+    const incoming = parsed.memory ?? parsed
+    if (!incoming.profiles) return null
+    return normalizeMemory(incoming)
+  } catch {
+    return null
+  }
 }
 
 export function applyLessonComplete(

@@ -737,6 +737,22 @@ input {
   box-shadow: 0 6px 0 #84d8ff;
 }
 
+.backup-box {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 20px;
+}
+
+.backup-text {
+  width: 100%;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+  resize: vertical;
+}
+
 .picker-shell {
   padding-bottom: 24px;
 }
