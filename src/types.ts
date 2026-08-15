@@ -79,6 +79,7 @@ export type Unit = {
 }
 
 export type Screen =
+  | { name: 'login' }
   | { name: 'picker' }
   | { name: 'home' }
   | { name: 'lesson'; lessonId: string }
@@ -100,6 +101,7 @@ export type ProfileDef = {
   blurb: string
   canJump: boolean
   outfit: string
+  pin: string
 }
 
 export type Progress = {

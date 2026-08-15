@@ -9,6 +9,7 @@ export const PROFILE_LIST: ProfileDef[] = [
     blurb: 'Grade 2 learner · follow the path',
     canJump: false,
     outfit: 'chikki',
+    pin: '01',
   },
   {
     id: 'siddhi',
@@ -18,6 +19,7 @@ export const PROFILE_LIST: ProfileDef[] = [
     blurb: 'Grade 2 learner · follow the path',
     canJump: false,
     outfit: 'gold',
+    pin: '02',
   },
   {
     id: 'sandeep',
@@ -27,6 +29,7 @@ export const PROFILE_LIST: ProfileDef[] = [
     blurb: 'Parent · jump to any lesson',
     canJump: true,
     outfit: 'mysore',
+    pin: '03',
   },
   {
     id: 'pragati',
@@ -36,6 +39,7 @@ export const PROFILE_LIST: ProfileDef[] = [
     blurb: 'Parent · jump to any lesson',
     canJump: true,
     outfit: 'gold',
+    pin: '04',
   },
 ]
 
