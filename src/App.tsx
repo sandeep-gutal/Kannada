@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ALL_LESSONS, getLesson, isUnlocked, STORIES, UNITS } from './data/curriculum'
 import { SWARAS, VYANJANAS } from './data/letters'
 import { PROFILE_LIST, getProfileDef } from './data/profiles'
 import { LessonView } from './components/LessonView'
 import { Mascot } from './components/Mascot'
+import { clearAuth, loadAuth, saveAuth, type AuthSession } from './lib/auth'
+import { pullCloud, pushCloud, syncFamily } from './lib/cloud'
 import {
   applyLessonComplete,
   currentLessonTitle,
@@ -18,7 +20,8 @@ import {
 } from './lib/progress'
 import { speakKannada } from './lib/speech'
 import { shuffle } from './lib/quiz'
-import type { AppMemory, ProfileId, Progress, Screen } from './types'
+import { profileForPin } from './lib/pins'
+import type { AppMemory, Progress, Screen } from './types'
 import './app-ui.css'
 
 function league(xp: number): string {
@@ -36,14 +39,27 @@ function updateActive(memory: AppMemory, next: Progress): AppMemory {
 }
 
 export default function App() {
-  const [memory, setMemory] = useState<AppMemory>(() => loadMemory())
+  const [auth, setAuth] = useState<AuthSession | null>(() => loadAuth())
+  const [memory, setMemory] = useState(() => {
+    const stored = loadMemory()
+    const session = loadAuth()
+    return session ? { ...stored, activeId: session.profileId } : stored
+  })
   const [screen, setScreen] = useState<Screen>(() =>
-    loadMemory().activeId ? { name: 'home' } : { name: 'picker' },
+    loadAuth() ? { name: 'home' } : { name: 'login' },
   )
   const [tab, setTab] = useState<'learn' | 'stories' | 'letters' | 'family' | 'profile'>('learn')
   const [practiceLesson, setPracticeLesson] = useState<(typeof ALL_LESSONS)[0] | null>(null)
   const [backupText, setBackupText] = useState('')
   const [backupNote, setBackupNote] = useState('')
+  const [pin, setPin] = useState('')
+  const [loginError, setLoginError] = useState('')
+  const [loginBusy, setLoginBusy] = useState(false)
+  const [syncState, setSyncState] = useState<'off' | 'saving' | 'saved' | 'error'>('off')
+  const screenRef = useRef(screen)
+  screenRef.current = screen
+  const authRef = useRef(auth)
+  authRef.current = auth
 
   useEffect(() => {
     const merged = saveMemory(memory)
@@ -51,10 +67,18 @@ export default function App() {
       setMemory(merged)
       return
     }
-    if (typeof BroadcastChannel === 'undefined') return
-    const channel = new BroadcastChannel(STORAGE_KEY)
-    channel.postMessage('saved')
-    channel.close()
+    if (typeof BroadcastChannel !== 'undefined') {
+      const channel = new BroadcastChannel(STORAGE_KEY)
+      channel.postMessage('saved')
+      channel.close()
+    }
+    const session = authRef.current
+    if (!session) return
+    const timer = window.setTimeout(() => {
+      setSyncState('saving')
+      void pushCloud(session.pin, memory).then((ok) => setSyncState(ok ? 'saved' : 'error'))
+    }, 800)
+    return () => window.clearTimeout(timer)
   }, [memory])
 
   useEffect(() => {
@@ -83,21 +107,71 @@ export default function App() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!auth) return
+    let cancelled = false
+    const pull = async () => {
+      if (screenRef.current.name === 'lesson') return
+      const cloud = await pullCloud(auth.pin)
+      if (!cloud || cancelled) return
+      setMemory((prev) => {
+        const merged = saveMemory(mergeMemory(cloud, { ...prev, activeId: auth.profileId }))
+        const next = { ...merged, activeId: auth.profileId }
+        return JSON.stringify(next) === JSON.stringify(prev) ? prev : next
+      })
+    }
+    void pull()
+    const id = window.setInterval(() => void pull(), 12000)
+    const onFocus = () => void pull()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [auth])
+
   const progress = memory.activeId ? memory.profiles[memory.activeId] : null
   const profileDef = progress ? getProfileDef(progress.profileId) : null
   const completedSet = useMemo(() => new Set(progress?.completed ?? []), [progress?.completed])
   const totalLessons = ALL_LESSONS.length
 
-  const selectProfile = (id: ProfileId) => {
-    const disk = loadMemory()
-    setMemory({ ...disk, activeId: id })
+  const loginWithPin = async (raw: string) => {
+    const profileId = profileForPin(raw)
+    if (!profileId) {
+      setLoginError('Use 01 Riddhi, 02 Siddhi, 03 Sandeep, or 04 Pragati')
+      return
+    }
+    const session: AuthSession = { pin: PROFILE_LIST.find((p) => p.id === profileId)!.pin, profileId }
+    setLoginBusy(true)
+    setLoginError('')
+    saveAuth(session)
+    setAuth(session)
+    setSyncState('saving')
+    try {
+      const next = await syncFamily(session.pin, { ...loadMemory(), activeId: profileId })
+      setMemory({ ...next, activeId: profileId })
+      setSyncState('saved')
+    } catch {
+      setMemory({ ...loadMemory(), activeId: profileId })
+      setSyncState('error')
+    }
+    setLoginBusy(false)
+    setPin('')
     setScreen({ name: 'home' })
     setTab('learn')
   }
 
+  const logout = () => {
+    clearAuth()
+    setAuth(null)
+    setSyncState('off')
+    setPin('')
+    setScreen({ name: 'login' })
+  }
+
   const openPicker = () => {
-    setMemory(loadMemory())
-    setScreen({ name: 'picker' })
+    logout()
   }
 
   const patch = (fn: (p: Progress) => Progress) => {
@@ -137,7 +211,7 @@ export default function App() {
         : getLesson(screen.lessonId)
       : undefined
 
-  if (screen.name === 'picker' || !progress || !profileDef) {
+  if (screen.name === 'login' || screen.name === 'picker' || !progress || !profileDef) {
     return (
       <div className="shell picker-shell">
         <header className="top">
@@ -149,31 +223,67 @@ export default function App() {
           </div>
         </header>
         <main className="page">
-          <h2>Who is learning?</h2>
+          <h2>Family login</h2>
           <p>
-            Each person has a separate path saved in this browser. Hearts and gems never run out.
-            Private windows start empty — use Family → Copy family save to bring progress across.
+            Type your 2-digit password. The same family save is shared on phones, private windows,
+            and preview links.
           </p>
-          <div className="profile-grid">
-            {PROFILE_LIST.map((p) => {
-              const stats = memory.profiles[p.id]
-              const done = stats.completed.length
-              return (
+          <div className="pin-box">
+            <div className="pin-dots" aria-label="Password">
+              <span className={pin.length > 0 ? 'on' : ''}>{pin[0] ? pin[0] : '•'}</span>
+              <span className={pin.length > 1 ? 'on' : ''}>{pin[1] ? pin[1] : '•'}</span>
+            </div>
+            <div className="pin-pad">
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9', '←', '0', 'Go'].map((key) => (
                 <button
-                  key={p.id}
-                  className="profile-card"
-                  style={{ borderColor: p.color }}
-                  onClick={() => selectProfile(p.id)}
+                  key={key}
+                  className="pin-key"
+                  disabled={loginBusy}
+                  onClick={() => {
+                    if (key === '←') {
+                      setPin((p) => p.slice(0, -1))
+                      setLoginError('')
+                      return
+                    }
+                    if (key === 'Go') {
+                      void loginWithPin(pin)
+                      return
+                    }
+                    setPin((p) => {
+                      const next = (p + key).slice(0, 2)
+                      if (next.length === 2) window.setTimeout(() => void loginWithPin(next), 50)
+                      return next
+                    })
+                    setLoginError('')
+                  }}
                 >
-                  <span className="profile-emoji">{p.emoji}</span>
-                  <b>{p.name}</b>
-                  <small>{p.blurb}</small>
-                  <span className="profile-stat">
-                    {done}/{totalLessons} lessons · {stats.xp} XP
-                  </span>
+                  {key}
                 </button>
-              )
-            })}
+              ))}
+            </div>
+            {loginError && <p className="login-error">{loginError}</p>}
+            {loginBusy && <p className="rom">Signing in and loading family progress…</p>}
+          </div>
+          <div className="profile-grid">
+            {PROFILE_LIST.map((p) => (
+              <button
+                key={p.id}
+                className="profile-card"
+                style={{ borderColor: p.color }}
+                disabled={loginBusy}
+                onClick={() => {
+                  setPin(p.pin)
+                  setLoginError('')
+                }}
+              >
+                <span className="profile-emoji">{p.emoji}</span>
+                <b>{p.name}</b>
+                <small>
+                  Password {p.pin}
+                  {p.canJump ? ' · can jump' : ''}
+                </small>
+              </button>
+            ))}
           </div>
         </main>
       </div>
@@ -311,6 +421,15 @@ export default function App() {
                   {profileDef.emoji} {progress.name}
                 </button>
                 <span>🔥 {progress.streak}</span>
+                <span className={'sync-pill ' + syncState}>
+                  {syncState === 'saved'
+                    ? '☁ saved'
+                    : syncState === 'saving'
+                      ? '☁ saving'
+                      : syncState === 'error'
+                        ? '☁ offline'
+                        : '☁'}
+                </span>
                 <span>💎 ∞</span>
                 <span>❤ ∞</span>
               </div>
@@ -442,10 +561,9 @@ export default function App() {
               <main className="page">
                 <h2>Family dashboard</h2>
                 <p className="note">
-                  Progress is saved in <strong>this browser’s memory</strong>, not on a server. The
-                  same website on the same phone or laptop shares one family save. A private /
-                  incognito window is a blank copy — it cannot see the other window unless you paste
-                  the family save below.
+                  Signed in as <strong>{progress.name}</strong>. Completing a lesson writes to the
+                  family cloud, so phones, private windows, and other Kali URLs see the same
+                  progress after login (01 Riddhi, 02 Siddhi, 03 Sandeep, 04 Pragati).
                 </p>
                 <div className="backup-box">
                   <button
@@ -529,8 +647,14 @@ export default function App() {
                       <p className="rom">
                         Last play: {stats.lastActive || 'not yet'} · ❤ ∞ · 💎 ∞
                       </p>
-                      <button className="ghost" onClick={() => selectProfile(p.id)}>
-                        {active ? 'Continue as ' + p.name : 'Switch to ' + p.name}
+                      <button
+                        className="ghost"
+                        onClick={() => {
+                          if (active) setTab('learn')
+                          else logout()
+                        }}
+                      >
+                        {active ? 'Continue as ' + p.name : 'Log in as ' + p.name}
                       </button>
                     </article>
                   )
@@ -567,8 +691,8 @@ export default function App() {
                 <button className="cta" onClick={startPractice}>
                   Practice weak words
                 </button>
-                <button className="ghost" onClick={openPicker}>
-                  Switch profile
+                <button className="ghost" onClick={logout}>
+                  Log out / switch person
                 </button>
                 <button className="ghost" onClick={() => setScreen({ name: 'shop' })}>
                   Shop

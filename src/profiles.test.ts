@@ -72,3 +72,15 @@ describe('family profiles', () => {
     expect(restored?.profiles.siddhi.completed).toContain(first.id)
   })
 })
+
+describe('family passwords', () => {
+  it('maps 01–04 to the four profiles', async () => {
+    const { profileForPin, isValidPin } = await import('./lib/pins')
+    expect(profileForPin('01')).toBe('riddhi')
+    expect(profileForPin('02')).toBe('siddhi')
+    expect(profileForPin('03')).toBe('sandeep')
+    expect(profileForPin('04')).toBe('pragati')
+    expect(isValidPin('99')).toBe(false)
+    expect(PROFILE_LIST.map((p) => p.pin)).toEqual(['01', '02', '03', '04'])
+  })
+})
