@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Lesson, Word } from '../types'
 import { speakKannada } from '../lib/speech'
 import { sameAnswer, shuffle } from '../lib/quiz'
+import { removeTileAt, removeTileByBankIndex, resolveMatchTap } from '../lib/lessonPlay'
 import { Mascot } from './Mascot'
 
 type Props = {
@@ -38,6 +39,8 @@ export function LessonView({
   const [usedTiles, setUsedTiles] = useState<number[]>([])
   const [leftPick, setLeftPick] = useState<string | null>(null)
   const [matched, setMatched] = useState<string[]>([])
+  const [matchMissed, setMatchMissed] = useState(false)
+  const [mismatch, setMismatch] = useState<{ left: string; right: string } | null>(null)
   const [tfPick, setTfPick] = useState<boolean | null>(null)
 
   const ex = lesson.exercises[i]
@@ -54,7 +57,21 @@ export function LessonView({
     return { left: shuffle(ex.pairs), right: shuffle(ex.pairs) }
   }, [ex])
 
+  useEffect(() => {
+    if (!mismatch) return
+    const id = window.setTimeout(() => setMismatch(null), 450)
+    return () => window.clearTimeout(id)
+  }, [mismatch])
+
   if (!ex) return null
+
+  const applyMistake = (word?: { kn: string; en: string; rom: string }) => {
+    setMistakes((m) => m + 1)
+    if (word) onWrong(word)
+    if (!unlimited && hearts <= 1) {
+      onOutOfHearts()
+    }
+  }
 
   const finishCheck = (correct: boolean, word?: { kn: string; en: string; rom: string }) => {
     setChecked(true)
@@ -63,11 +80,21 @@ export function LessonView({
       onCorrect()
       return
     }
-    setMistakes((m) => m + 1)
-    if (word) onWrong(word)
-    if (!unlimited && hearts <= 1) {
-      onOutOfHearts()
-    }
+    applyMistake(word)
+  }
+
+  const unselectTileAt = (pickIndex: number) => {
+    if (checked) return
+    const nextTiles = removeTileAt(tilePicks, usedTiles, pickIndex)
+    setTilePicks(nextTiles.picks)
+    setUsedTiles(nextTiles.usedBankIndexes)
+  }
+
+  const unselectBankTile = (bankIndex: number) => {
+    if (checked) return
+    const nextTiles = removeTileByBankIndex(tilePicks, usedTiles, bankIndex)
+    setTilePicks(nextTiles.picks)
+    setUsedTiles(nextTiles.usedBankIndexes)
   }
 
   const next = () => {
@@ -83,6 +110,8 @@ export function LessonView({
     setUsedTiles([])
     setLeftPick(null)
     setMatched([])
+    setMatchMissed(false)
+    setMismatch(null)
     setTfPick(null)
   }
 
@@ -168,22 +197,45 @@ export function LessonView({
             🔊 Hint audio
           </button>
           <div className="built">
-            {tilePicks.length === 0 ? <span className="ph">Tap letters below</span> : tilePicks.join('')}
+            {tilePicks.length === 0 ? (
+              <span className="ph">Tap letters below</span>
+            ) : (
+              tilePicks.map((part, pickIndex) => (
+                <button
+                  key={`${part}-${usedTiles[pickIndex]}-${pickIndex}`}
+                  type="button"
+                  className="built-chip"
+                  disabled={checked}
+                  aria-label={`Remove ${part}`}
+                  onClick={() => unselectTileAt(pickIndex)}
+                >
+                  {part}
+                </button>
+              ))
+            )}
           </div>
           <div className="tiles">
-            {tileBank.map((part, idx) => (
-              <button
-                key={part + idx}
-                className="tile"
-                disabled={checked || usedTiles.includes(idx)}
-                onClick={() => {
-                  setUsedTiles((u) => [...u, idx])
-                  setTilePicks((t) => [...t, part])
-                }}
-              >
-                {part}
-              </button>
-            ))}
+            {tileBank.map((part, idx) => {
+              const used = usedTiles.includes(idx)
+              return (
+                <button
+                  key={part + idx}
+                  className={'tile' + (used ? ' used' : '')}
+                  disabled={checked}
+                  aria-label={used ? `Unselect ${part}` : `Add ${part}`}
+                  onClick={() => {
+                    if (used) {
+                      unselectBankTile(idx)
+                      return
+                    }
+                    setUsedTiles((u) => [...u, idx])
+                    setTilePicks((t) => [...t, part])
+                  }}
+                >
+                  {part}
+                </button>
+              )
+            })}
           </div>
           <button
             className="ghost"
@@ -207,12 +259,13 @@ export function LessonView({
                 className={
                   'choice' +
                   (matched.includes(w.kn) ? ' good' : '') +
-                  (leftPick === w.kn ? ' on' : '')
+                  (leftPick === w.kn ? ' on' : '') +
+                  (mismatch?.left === w.kn ? ' bad' : '')
                 }
                 disabled={matched.includes(w.kn) || checked}
                 onClick={() => {
                   speakKannada(w.kn)
-                  setLeftPick(w.kn)
+                  setLeftPick((current) => (current === w.kn ? null : w.kn))
                 }}
               >
                 {w.kn}
@@ -223,20 +276,30 @@ export function LessonView({
             {matchCols.right.map((w) => (
               <button
                 key={'R' + w.kn}
-                className={'choice' + (matched.includes(w.kn) ? ' good' : '')}
+                className={
+                  'choice' +
+                  (matched.includes(w.kn) ? ' good' : '') +
+                  (mismatch?.right === w.kn ? ' bad' : '')
+                }
                 disabled={matched.includes(w.kn) || checked}
                 onClick={() => {
-                  if (!leftPick) return
-                  if (leftPick === w.kn) {
-                    const next = [...matched, w.kn]
-                    setMatched(next)
-                    setLeftPick(null)
-                    if (next.length === ex.pairs.length) {
+                  const outcome = resolveMatchTap(leftPick, w.kn, matched, ex.pairs.length)
+                  if (outcome.result === 'need-left') return
+                  setLeftPick(outcome.leftPick)
+                  setMatched(outcome.matched)
+                  if (outcome.result === 'miss') {
+                    setMatchMissed(true)
+                    setMismatch({ left: leftPick!, right: w.kn })
+                    applyMistake({ kn: w.kn, en: w.en, rom: w.rom })
+                    return
+                  }
+                  if (outcome.allMatched) {
+                    if (matchMissed) {
+                      setChecked(true)
+                      setOk(false)
+                    } else {
                       finishCheck(true)
                     }
-                  } else {
-                    finishCheck(false, { kn: w.kn, en: w.en, rom: w.rom })
-                    setLeftPick(null)
                   }
                 }}
               >
@@ -291,10 +354,8 @@ export function LessonView({
                 {ex.options.find((o) => o.kn === ex.correctKn)?.en}
               </p>
             )}
-            {ex.kind === 'tiles' && (
-              <p>
-                {ex.word.kn} ({ex.word.rom})
-              </p>
+            {ex.kind === 'match' && (
+              <p>{ok ? 'All pairs matched.' : 'A mismatch cost a try, but you could still finish the rest.'}</p>
             )}
           </div>
         </div>
