@@ -540,17 +540,35 @@ input {
   box-shadow: 0 3px 0 #ddd;
 }
 
+.tile.used {
+  opacity: 0.4;
+}
+
 .built {
   min-height: 56px;
   border: 2px dashed #ccc;
   border-radius: 12px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
+  gap: 8px;
+  padding: 8px;
   font-size: 28px;
   font-family: var(--kn);
   font-weight: 800;
   margin: 12px 0;
+}
+
+.built-chip {
+  border: 2px solid var(--line);
+  background: #fff;
+  border-radius: 12px;
+  padding: 6px 10px;
+  font-size: 22px;
+  font-family: var(--kn);
+  font-weight: 800;
+  box-shadow: 0 3px 0 #ddd;
 }
 
 .ph {
